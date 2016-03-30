@@ -30,11 +30,19 @@ namespace Microsoft.AspNetCore.Server.Kestrel.Http
         private int _consumingState;
         private object _sync = new object();
 
+        private readonly BufferLengthConnectionController _bufferLengthConnectionController;
+
         public SocketInput(MemoryPool memory, IThreadPool threadPool)
         {
             _memory = memory;
             _threadPool = threadPool;
             _awaitableState = _awaitableIsNotCompleted;
+        }
+
+        public SocketInput(MemoryPool memory, IThreadPool threadPool, long maxBufferLength, IConnectionControl connectionControl,
+            KestrelThread connectionThread) : this(memory, threadPool)
+        {
+            _bufferLengthConnectionController = new BufferLengthConnectionController(maxBufferLength, connectionControl, connectionThread);
         }
 
         public bool RemoteIntakeFin { get; set; }
@@ -61,6 +69,9 @@ namespace Microsoft.AspNetCore.Server.Kestrel.Http
         {
             lock (_sync)
             {
+                // Must call Add() before bytes are available to consumer, to ensure that Length is >= 0
+                _bufferLengthConnectionController?.Add(count);
+
                 if (count > 0)
                 {
                     if (_tail == null)
@@ -91,6 +102,9 @@ namespace Microsoft.AspNetCore.Server.Kestrel.Http
         {
             lock (_sync)
             {
+                // Must call Add() before bytes are available to consumer, to ensure that Length is >= 0
+                _bufferLengthConnectionController?.Add(count);
+
                 if (_pinned != null)
                 {
                     _pinned.End += count;
@@ -176,10 +190,16 @@ namespace Microsoft.AspNetCore.Server.Kestrel.Http
 
                 if (!consumed.IsDefault)
                 {
+                    var lengthConsumed = new MemoryPoolIterator(_head).GetLength(consumed);
+
                     returnStart = _head;
                     returnEnd = consumed.Block;
                     _head = consumed.Block;
                     _head.Start = consumed.Index;
+
+                    // Must call Subtract() after bytes have been freed, to avoid producer starting too early and growing
+                    // buffer beyond max length.
+                    _bufferLengthConnectionController?.Subtract(lengthConsumed);
                 }
 
                 if (!examined.IsDefault &&
@@ -294,6 +314,73 @@ namespace Microsoft.AspNetCore.Server.Kestrel.Http
 
             _head = null;
             _tail = null;
+        }
+
+        private class BufferLengthConnectionController
+        {
+            private readonly long _maxLength;
+            private readonly IConnectionControl _connectionControl;
+            private readonly KestrelThread _connectionThread;
+
+            private readonly object _lock = new object();
+
+            private long _length;
+            private bool _connectionPaused;
+
+            public BufferLengthConnectionController(long maxLength, IConnectionControl connectionControl, KestrelThread connectionThread)
+            {
+                _maxLength = maxLength;
+                _connectionControl = connectionControl;
+                _connectionThread = connectionThread;
+            }
+
+            public long Length
+            {
+                get
+                {
+                    return _length;
+                }
+                set
+                {
+                    // Caller should ensure that bytes are never consumed before the producer has called Add()
+                    Debug.Assert(value >= 0);
+
+                    _length = value;
+                }
+            }
+
+            public void Add(int count)
+            {
+                // Add() should never be called while connection is paused, since ConnectionControl.Pause() runs on a libuv thread
+                // and should take effect immediately.
+                Debug.Assert(!_connectionPaused);
+
+                lock (_lock)
+                {
+                    Length += count;
+                    if (Length >= _maxLength)
+                    {
+                        _connectionPaused = true;
+                        _connectionControl.Pause();
+                    }
+                }
+            }
+
+            public void Subtract(int count)
+            {
+                lock (_lock)
+                {
+                    Length -= count;
+
+                    if (_connectionPaused && Length < _maxLength)
+                    {
+                        _connectionPaused = false;
+                        _connectionThread.Post(
+                            (connectionControl) => ((IConnectionControl)connectionControl).Resume(),
+                            _connectionControl);
+                    }
+                }
+            }
         }
     }
 }

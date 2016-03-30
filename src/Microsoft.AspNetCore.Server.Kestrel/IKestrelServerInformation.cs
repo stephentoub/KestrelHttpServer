@@ -11,6 +11,14 @@ namespace Microsoft.AspNetCore.Server.Kestrel
         int ThreadCount { get; set; }
 
         /// <summary>
+        /// The maximum number of bytes that will be buffered in memory when reading a request.
+        /// Default value is 1048576 (1 MB).
+        /// A custom value can be configured using the "kestrel.maxInputBufferLength" key in
+        /// <seealso cref="Microsoft.Extensions.Configuration.IConfiguration"/>.
+        /// </summary>
+        long MaxInputBufferLength { get; set; }
+
+        /// <summary>
         /// The amount of time after the server begins shutting down before connections will be forcefully closed.
         /// By default, Kestrel will wait 5 seconds for any ongoing requests to complete before terminating
         /// the connection.

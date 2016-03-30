@@ -21,6 +21,7 @@ namespace Microsoft.AspNetCore.Server.Kestrel
 
             Addresses = GetAddresses(configuration);
             ThreadCount = GetThreadCount(configuration);
+            MaxInputBufferLength = GetMaxInputBufferLength(configuration);
             ShutdownTimeout = GetShutdownTimeout(configuration);
             NoDelay = GetNoDelay(configuration);
             PoolingParameters = new KestrelServerPoolingParameters(configuration);
@@ -29,6 +30,8 @@ namespace Microsoft.AspNetCore.Server.Kestrel
         public ICollection<string> Addresses { get; }
 
         public int ThreadCount { get; set; }
+
+        public long MaxInputBufferLength { get; set; }
 
         public TimeSpan ShutdownTimeout { get; set; }
 
@@ -94,6 +97,26 @@ namespace Microsoft.AspNetCore.Server.Kestrel
             }
 
             return ProcessorThreadCount;
+        }
+
+        private static long GetMaxInputBufferLength(IConfiguration configuration)
+        {
+            const long defaultMaxInputBufferLength = 1024 * 1024;
+
+            var maxInputBufferLengthString = configuration["kestrel.maxInputBufferLength"];
+
+            if (string.IsNullOrEmpty(maxInputBufferLengthString))
+            {
+                return defaultMaxInputBufferLength;
+            }
+
+            long maxInputBufferLength;
+            if (long.TryParse(maxInputBufferLengthString, NumberStyles.Integer, CultureInfo.InvariantCulture, out maxInputBufferLength))
+            {
+                return maxInputBufferLength;
+            }
+
+            return defaultMaxInputBufferLength;
         }
 
         private TimeSpan GetShutdownTimeout(IConfiguration configuration)

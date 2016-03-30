@@ -46,7 +46,26 @@ namespace Microsoft.AspNetCore.Server.Kestrel.Http
 
             ConnectionId = GenerateConnectionId(Interlocked.Increment(ref _lastConnectionId));
 
-            _rawSocketInput = new SocketInput(Memory, ThreadPool);
+            var maxInputBufferLength = context.ServerInformation.MaxInputBufferLength;
+            if (maxInputBufferLength < -1 || maxInputBufferLength == 0)
+            {
+                var paramName = String.Join(".",
+                    nameof(context),
+                    nameof(context.ServerInformation),
+                    nameof(context.ServerInformation.MaxInputBufferLength));
+
+                throw new ArgumentOutOfRangeException(paramName, maxInputBufferLength, $"{paramName} must be positive or -1.");
+            }
+
+            if (maxInputBufferLength == -1)
+            {
+                _rawSocketInput = new SocketInput(Memory, ThreadPool);
+            }
+            else
+            {
+                _rawSocketInput = new SocketInput(Memory, ThreadPool, maxInputBufferLength, this, Thread);
+            }
+
             _rawSocketOutput = new SocketOutput(Thread, _socket, Memory, this, ConnectionId, Log, ThreadPool, WriteReqPool);
         }
 
