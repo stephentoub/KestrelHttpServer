@@ -6,6 +6,7 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Net;
 using System.Net.Http;
+using System.Net.Security;
 using System.Net.Sockets;
 using System.Threading.Tasks;
 using Microsoft.AspNetCore.Builder;
@@ -21,6 +22,15 @@ namespace Microsoft.AspNetCore.Server.Kestrel.FunctionalTests
 {
     public class AddressRegistrationTests
     {
+#if NET451
+        static AddressRegistrationTests()
+        {
+            // SecurityProtocolType values below not available in Mono < 4.3
+            const int SecurityProtocolTypeTls11 = 768;
+            const int SecurityProtocolTypeTls12 = 3072;
+            ServicePointManager.SecurityProtocol |= (SecurityProtocolType)(SecurityProtocolTypeTls12 | SecurityProtocolTypeTls11);
+        }
+#endif
 
         [Theory, MemberData(nameof(AddressRegistrationDataIPv4))]
         public async Task RegisterAddresses_IPv4_Success(string addressInput, Func<IServerAddressesFeature, string[]> testUrls)
@@ -56,13 +66,33 @@ namespace Microsoft.AspNetCore.Server.Kestrel.FunctionalTests
             {
                 host.Start();
 
-                using (var client = new HttpClient())
+                RemoteCertificateValidationCallback validationCallback =
+                        (sender, cert, chain, sslPolicyErrors) => true;
+
+                try
                 {
-                    foreach (var testUrl in testUrls(host.ServerFeatures.Get<IServerAddressesFeature>()))
+#if NET451
+                    var handler = new HttpClientHandler();
+                    ServicePointManager.ServerCertificateValidationCallback += validationCallback;
+#else
+                    var handler = new WinHttpHandler();
+                    handler.ServerCertificateValidationCallback += (sender, cert, chain, sslPolicyErrors) => true;
+#endif
+
+                    using (var client = new HttpClient(handler))
                     {
-                        var responseText = await client.GetStringAsync(testUrl);
-                        Assert.Equal(testUrl, responseText);
+                        foreach (var testUrl in testUrls(host.ServerFeatures.Get<IServerAddressesFeature>()))
+                        {
+                            var responseText = await client.GetStringAsync(testUrl);
+                            Assert.Equal(testUrl, responseText);
+                        }
                     }
+                }
+                finally
+                {
+#if NET451
+                    ServicePointManager.ServerCertificateValidationCallback -= validationCallback;
+#endif
                 }
             }
         }
@@ -80,6 +110,7 @@ namespace Microsoft.AspNetCore.Server.Kestrel.FunctionalTests
                 // Default port
                 dataset.Add("http://*", _ => new[] { "http://localhost/" });
                 dataset.Add("http://localhost", _ => new[] { "http://localhost/" });
+                dataset.Add("https://localhost", _ => new[] { "https://localhost/" });
 
                 // Static port
                 var port1 = GetNextPort();
@@ -96,7 +127,7 @@ namespace Microsoft.AspNetCore.Server.Kestrel.FunctionalTests
 
                 // Dynamic port
                 dataset.Add("0", GetTestUrlsIPv4);
-                dataset.Add("http://localhost:0/", GetTestUrlsIPv4);
+                dataset.Add("http://localhost:0/;https://localhost:0", GetTestUrlsIPv4);
 
                 return dataset;
             }
