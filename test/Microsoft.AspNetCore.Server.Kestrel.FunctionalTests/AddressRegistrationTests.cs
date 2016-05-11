@@ -6,6 +6,7 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Net;
 using System.Net.Http;
+using System.Net.NetworkInformation;
 using System.Net.Sockets;
 using System.Threading.Tasks;
 using Microsoft.AspNetCore.Builder;
@@ -112,7 +113,7 @@ namespace Microsoft.AspNetCore.Server.Kestrel.FunctionalTests
                 dataset.Add("http://localhost:0/", GetTestUrls);
                 dataset.Add($"http://{Dns.GetHostName()}:0/", GetTestUrls);
 
-                var ipv4Addresses = Dns.GetHostAddressesAsync(Dns.GetHostName()).Result
+                var ipv4Addresses = GetIPAddresses()
                     .Where(ip => ip.AddressFamily == AddressFamily.InterNetwork);
                 foreach (var ip in ipv4Addresses)
                 {
@@ -154,7 +155,7 @@ namespace Microsoft.AspNetCore.Server.Kestrel.FunctionalTests
                 dataset.Add($"http://127.0.0.1:{port}/;http://[::1]:{port}/", _ => new[] { $"http://127.0.0.1:{port}/", $"http://[::1]:{port}/" });
 
                 // Dynamic port
-                var ipv6Addresses = Dns.GetHostAddressesAsync(Dns.GetHostName()).Result
+                var ipv6Addresses = GetIPAddresses()
                     .Where(ip => ip.AddressFamily == AddressFamily.InterNetworkV6)
                     .Where(ip => ip.ScopeId == 0);
                 foreach (var ip in ipv6Addresses)
@@ -173,7 +174,7 @@ namespace Microsoft.AspNetCore.Server.Kestrel.FunctionalTests
                 var dataset = new TheoryData<string, Func<IServerAddressesFeature, string[]>>();
 
                 // Dynamic port
-                var ipv6Addresses = Dns.GetHostAddressesAsync(Dns.GetHostName()).Result
+                var ipv6Addresses = GetIPAddresses()
                     .Where(ip => ip.AddressFamily == AddressFamily.InterNetworkV6)
                     .Where(ip => ip.ScopeId != 0);
                 foreach (var ip in ipv6Addresses)
@@ -183,6 +184,13 @@ namespace Microsoft.AspNetCore.Server.Kestrel.FunctionalTests
 
                 return dataset;
             }
+        }
+
+        private static IEnumerable<IPAddress> GetIPAddresses()
+        {
+            return NetworkInterface.GetAllNetworkInterfaces()
+                .SelectMany(i => i.GetIPProperties().UnicastAddresses)
+                .Select(a => a.Address);
         }
 
         private static string[] GetTestUrls(IServerAddressesFeature addressesFeature)
