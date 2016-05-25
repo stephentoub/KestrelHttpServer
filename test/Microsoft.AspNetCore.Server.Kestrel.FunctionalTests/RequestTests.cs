@@ -10,6 +10,7 @@ using System.Threading.Tasks;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Http;
+using Microsoft.AspNetCore.Http.Features;
 using Microsoft.AspNetCore.Testing.xunit;
 using Newtonsoft.Json;
 using Newtonsoft.Json.Linq;
@@ -222,7 +223,7 @@ namespace Microsoft.AspNetCore.Server.Kestrel.FunctionalTests
                     app.Run(async context =>
                     {
                         var connection = context.Connection;
-                        Assert.Equal(requestTarget, context.Request.RawTarget);
+                        Assert.Equal(requestTarget, context.Features.Get<IHttpRequestFeature>().RawTarget);
                         await context.Response.WriteAsync("hello, world");
                     });
                 });
