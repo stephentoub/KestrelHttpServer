@@ -86,6 +86,7 @@ namespace Microsoft.AspNetCore.Server.Kestrel.Http
         public string PathBase { get; set; }
         public string Path { get; set; }
         public string QueryString { get; set; }
+        public string RawTarget { get; set; }
         public string HttpVersion
         {
             get
@@ -850,6 +851,8 @@ namespace Microsoft.AspNetCore.Server.Kestrel.Http
                     queryString = begin.GetAsciiString(scan);
                 }
 
+                var rawTarget = pathBegin.GetAsciiString(scan);
+
                 if (pathBegin.Peek() == ' ')
                 {
                     RejectRequest("Missing request target.");
@@ -916,13 +919,11 @@ namespace Microsoft.AspNetCore.Server.Kestrel.Http
                 Method = method;
                 RequestUri = requestUrlPath;
                 QueryString = queryString;
+                RawTarget = rawTarget;
                 HttpVersion = httpVersion;
 
                 bool caseMatches;
-
-                if (!string.IsNullOrEmpty(_pathBase) &&
-                    (requestUrlPath.Length == _pathBase.Length || (requestUrlPath.Length > _pathBase.Length && requestUrlPath[_pathBase.Length] == '/')) &&
-                    RequestUrlStartsWithPathBase(requestUrlPath, out caseMatches))
+                if (RequestUrlStartsWithPathBase(requestUrlPath, out caseMatches))
                 {
                     PathBase = caseMatches ? _pathBase : requestUrlPath.Substring(0, _pathBase.Length);
                     Path = requestUrlPath.Substring(_pathBase.Length);
@@ -943,6 +944,16 @@ namespace Microsoft.AspNetCore.Server.Kestrel.Http
         private bool RequestUrlStartsWithPathBase(string requestUrl, out bool caseMatches)
         {
             caseMatches = true;
+
+            if (string.IsNullOrEmpty(_pathBase))
+            {
+                return false;
+            }
+
+            if (requestUrl.Length < _pathBase.Length || (requestUrl.Length > _pathBase.Length && requestUrl[_pathBase.Length] != '/'))
+            {
+                return false;
+            }
 
             for (var i = 0; i < _pathBase.Length; i++)
             {

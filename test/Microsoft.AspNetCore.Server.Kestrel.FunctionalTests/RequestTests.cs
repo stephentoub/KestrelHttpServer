@@ -202,6 +202,58 @@ namespace Microsoft.AspNetCore.Server.Kestrel.FunctionalTests
             }
         }
 
+        [Theory]
+        [InlineData("/")]
+        [InlineData("/path")]
+        [InlineData("/path?foo=1&bar=2")]
+        [InlineData("/hello%20world")]
+        [InlineData("/hello%20world?foo=1&bar=2")]
+        [InlineData("/base/path")]
+        [InlineData("/base/path?foo=1&bar=2")]
+        [InlineData("/base/hello%20world")]
+        [InlineData("/base/hello%20world?foo=1&bar=2")]
+        public void RequestFeatureContainsRawTarget(string requestTarget)
+        {
+            var builder = new WebHostBuilder()
+                .UseKestrel()
+                .UseUrls($"http://localhost:0/base")
+                .Configure(app =>
+                {
+                    app.Run(async context =>
+                    {
+                        var connection = context.Connection;
+                        Assert.Equal(requestTarget, context.Request.RawTarget);
+                        await context.Response.WriteAsync("hello, world");
+                    });
+                });
+
+            using (var host = builder.Build())
+            {
+                host.Start();
+
+                using (var socket = TestConnection.CreateConnectedLoopbackSocket(host.GetPort()))
+                {
+                    socket.Send(Encoding.ASCII.GetBytes($"GET {requestTarget} HTTP/1.1\r\n\r\n"));
+                    socket.Shutdown(SocketShutdown.Send);
+
+                    var response = new StringBuilder();
+                    var buffer = new byte[4096];
+                    while (true)
+                    {
+                        var length = socket.Receive(buffer);
+                        if (length == 0)
+                        {
+                            break;
+                        }
+
+                        response.Append(Encoding.ASCII.GetString(buffer, 0, length));
+                    }
+
+                    Assert.StartsWith("HTTP/1.1 200 OK", response.ToString());
+                }
+            }
+        }
+
         private async Task TestRemoteIPAddress(string registerAddress, string requestAddress, string expectAddress)
         {
             var builder = new WebHostBuilder()
