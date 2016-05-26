@@ -851,7 +851,7 @@ namespace Microsoft.AspNetCore.Server.Kestrel.Http
                     queryString = begin.GetAsciiString(scan);
                 }
 
-                var rawTarget = pathBegin.GetAsciiString(scan);
+                var queryEnd = scan;
 
                 if (pathBegin.Peek() == ' ')
                 {
@@ -900,8 +900,12 @@ namespace Microsoft.AspNetCore.Server.Kestrel.Http
                 // Multibyte Internationalized Resource Identifiers (IRIs) are first converted to utf8;
                 // then encoded/escaped to ASCII  https://www.ietf.org/rfc/rfc3987.txt "Mapping of IRIs to URIs"
                 string requestUrlPath;
+                string rawTarget;
                 if (needDecode)
                 {
+                    // Read raw target before mutating memory.
+                    rawTarget = pathBegin.GetAsciiString(queryEnd);
+
                     // URI was encoded, unescape and then parse as utf8
                     pathEnd = UrlPathDecoder.Unescape(pathBegin, pathEnd);
                     requestUrlPath = pathBegin.GetUtf8String(pathEnd);
@@ -911,6 +915,17 @@ namespace Microsoft.AspNetCore.Server.Kestrel.Http
                 {
                     // URI wasn't encoded, parse as ASCII
                     requestUrlPath = pathBegin.GetAsciiString(pathEnd);
+
+                    if (queryString.Length == 0)
+                    {
+                        // No need to allocate an extra string if the path didn't need
+                        // decoding and there's no query string following it.
+                        rawTarget = requestUrlPath;
+                    }
+                    else
+                    {
+                        rawTarget = pathBegin.GetAsciiString(queryEnd);
+                    }
                 }
 
                 requestUrlPath = PathNormalizer.RemoveDotSegments(requestUrlPath);
