@@ -217,13 +217,63 @@ namespace Microsoft.AspNetCore.Server.Kestrel.FunctionalTests
         {
             var builder = new WebHostBuilder()
                 .UseKestrel()
-                .UseUrls($"http://localhost:0/base")
+                .UseUrls($"http://127.0.0.1:0/base")
                 .Configure(app =>
                 {
                     app.Run(async context =>
                     {
                         var connection = context.Connection;
                         Assert.Equal(requestTarget, context.Features.Get<IHttpRequestFeature>().RawTarget);
+                        await context.Response.WriteAsync("hello, world");
+                    });
+                });
+
+            using (var host = builder.Build())
+            {
+                host.Start();
+
+                using (var socket = TestConnection.CreateConnectedLoopbackSocket(host.GetPort()))
+                {
+                    socket.Send(Encoding.ASCII.GetBytes($"GET {requestTarget} HTTP/1.1\r\n\r\n"));
+                    socket.Shutdown(SocketShutdown.Send);
+
+                    var response = new StringBuilder();
+                    var buffer = new byte[4096];
+                    while (true)
+                    {
+                        var length = socket.Receive(buffer);
+                        if (length == 0)
+                        {
+                            break;
+                        }
+
+                        response.Append(Encoding.ASCII.GetString(buffer, 0, length));
+                    }
+
+                    Assert.StartsWith("HTTP/1.1 200 OK", response.ToString());
+                }
+            }
+        }
+
+        [Theory]
+        [InlineData("*")]
+        [InlineData("DoesNotStartWith/")]
+        [InlineData("*?arg=value")]
+        [InlineData("*/?arg=value")]
+        public void NonPathRequestTargetSetInRawTarget(string requestTarget)
+        {
+            var builder = new WebHostBuilder()
+                .UseKestrel()
+                .UseUrls($"http://127.0.0.1:0/")
+                .Configure(app =>
+                {
+                    app.Run(async context =>
+                    {
+                        var connection = context.Connection;
+                        Assert.Equal(requestTarget, context.Features.Get<IHttpRequestFeature>().RawTarget);
+                        Assert.Empty(context.Request.Path.Value);
+                        Assert.Empty(context.Request.PathBase.Value);
+                        Assert.Empty(context.Request.QueryString.Value);
                         await context.Response.WriteAsync("hello, world");
                     });
                 });

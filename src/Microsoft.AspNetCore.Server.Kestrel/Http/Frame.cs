@@ -928,9 +928,15 @@ namespace Microsoft.AspNetCore.Server.Kestrel.Http
                     PathBase = caseMatches ? _pathBase : requestUrlPath.Substring(0, _pathBase.Length);
                     Path = requestUrlPath.Substring(_pathBase.Length);
                 }
-                else
+                else if (requestUrlPath[0] == '/')
                 {
                     Path = requestUrlPath;
+                }
+                else
+                {
+                    Path = string.Empty;
+                    PathBase = string.Empty;
+                    QueryString = string.Empty;
                 }
 
                 return RequestLineStatus.Done;
