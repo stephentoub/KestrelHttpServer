@@ -928,7 +928,7 @@ namespace Microsoft.AspNetCore.Server.Kestrel.Http
                     PathBase = caseMatches ? _pathBase : requestUrlPath.Substring(0, _pathBase.Length);
                     Path = requestUrlPath.Substring(_pathBase.Length);
                 }
-                else if (requestUrlPath[0] == '/')
+                else if (rawTarget[0] == '/') // check rawTarget since requestUrlPath can be "" or "/" after dot segment removal
                 {
                     Path = requestUrlPath;
                 }
