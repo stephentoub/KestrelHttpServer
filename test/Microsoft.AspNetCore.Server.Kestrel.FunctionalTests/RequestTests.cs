@@ -205,6 +205,12 @@ namespace Microsoft.AspNetCore.Server.Kestrel.FunctionalTests
 
         [Theory]
         [InlineData("/")]
+        [InlineData("/.")]
+        [InlineData("/..")]
+        [InlineData("/./.")]
+        [InlineData("/./..")]
+        [InlineData("/../.")]
+        [InlineData("/../..")]
         [InlineData("/path")]
         [InlineData("/path?foo=1&bar=2")]
         [InlineData("/hello%20world")]
@@ -257,9 +263,17 @@ namespace Microsoft.AspNetCore.Server.Kestrel.FunctionalTests
 
         [Theory]
         [InlineData("*")]
-        [InlineData("DoesNotStartWith/")]
-        [InlineData("*?arg=value")]
         [InlineData("*/?arg=value")]
+        [InlineData("*?arg=value")]
+        [InlineData("DoesNotStartWith/")]
+        [InlineData("DoesNotStartWith/?arg=value")]
+        [InlineData("DoesNotStartWithSlash?arg=value")]
+        [InlineData("./")]
+        [InlineData("../")]
+        [InlineData("../.")]
+        [InlineData(".././")]
+        [InlineData("../..")]
+        [InlineData("../../")]
         public void NonPathRequestTargetSetInRawTarget(string requestTarget)
         {
             var builder = new WebHostBuilder()
