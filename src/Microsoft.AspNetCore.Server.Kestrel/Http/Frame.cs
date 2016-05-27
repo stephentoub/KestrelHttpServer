@@ -218,8 +218,10 @@ namespace Microsoft.AspNetCore.Server.Kestrel.Http
         {
             if (FrameRequestHeaders == null)
             {
-                RequestHeaders = FrameRequestHeaders = new FrameRequestHeaders();
+                FrameRequestHeaders = new FrameRequestHeaders();
             }
+
+            RequestHeaders = FrameRequestHeaders;
 
             if (FrameResponseHeaders == null)
             {
