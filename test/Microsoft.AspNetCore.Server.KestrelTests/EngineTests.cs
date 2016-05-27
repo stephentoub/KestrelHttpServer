@@ -1085,16 +1085,17 @@ namespace Microsoft.AspNetCore.Server.KestrelTests
 
             using (var server = new TestServer(httpContext =>
             {
+                var requestFeature = httpContext.Features.Get<IHttpRequestFeature>();
+
                 if (firstRequest)
                 {
-                    var requestFeature = httpContext.Features.Get<IHttpRequestFeature>();
                     originalRequestHeaders = requestFeature.Headers;
                     requestFeature.Headers = new FrameRequestHeaders();
                     firstRequest = false;
                 }
                 else
                 {
-                    Assert.Same(originalRequestHeaders, httpContext.Features.Get<IHttpRequestFeature>().Headers);
+                    Assert.Same(originalRequestHeaders, requestFeature.Headers);
                 }
 
                 return TaskUtilities.CompletedTask;
